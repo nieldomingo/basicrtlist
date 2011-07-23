@@ -1,0 +1,25 @@
+body {
+	font-size: 10px;
+}
+
+#itemform ul {
+	padding-left: 0;
+}
+
+#itemform li {
+	display: block;
+}
+
+#itemform .formlabel {
+	float: left;
+	text-align: right;
+	width: 60px;
+}
+
+#itemform .formwidget {
+	margin-left: 70px;
+}
+
+.itementry {
+	border-top: 1px solid grey;
+}

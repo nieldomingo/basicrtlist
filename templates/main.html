@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="itemform" title="Item Form">
+  <form id ="itemformmain" action="/save" method="post">
+    <ul>
+      <li>
+        <div class="formlabel">
+          <label for="itemtitle">Title</label>
+        </div>
+        <div class="formwidget">
+          <input name="itemtitle"
+                 type="text"
+                 placeholder="Place Title Here"
+                 size="50"
+                 required>
+        </div>
+      </li>
+      <li>
+        <div class="formlabel">
+          <label for="itemtext">Main Text</label>
+        </div>
+        <div class="formwidget">
+          <textarea name="itemtext"
+                    cols="50"
+                    rows="5"
+                    required>
+          </textarea>
+        </div>
+      </li>
+    </ul>
+  </form>
+</div>
+<input type="button" name="additem" value="Add New Item"/>
+<div id="mainlist">
+</div>
+{% endblock %}
+
+{% block addscript %}
+<script src="/js/main.js"></script>
+{% endblock %}

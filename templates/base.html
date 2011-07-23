@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title></title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <link type="text/css" href="/style/smoothness/jquery-ui-1.8.14.custom.css" rel="stylesheet" />
+  <link type="text/css" href="/style/main.css" rel="stylesheet" />
+</head>
+
+<body>
+  <header>
+  {% block header %}{% endblock %}
+  </header>
+
+  <div id="contentwrapper">
+  {% block content %}{% endblock %}
+  </div>
+
+  <footer>
+  {% block footer %}{% endblock %}
+  </footer>
+
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js"></script>
+  <script src="/js/jquery.evently.js"></script>
+  <script src="/js/jquery.mustache.js"></script>
+  <script src="/js/jquery-ui-1.8.14.custom.min.js"></script>
+  <script src="/_ah/channel/jsapi"></script>
+  {% block addscript %}{% endblock %}
+</body>
+
+</html>
