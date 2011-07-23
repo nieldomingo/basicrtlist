@@ -70,8 +70,8 @@ $(function () {
 		
 	var setupChannel = function () {
 		$.getJSON('/gettoken', function (data) {
-			channel = new goog.appengine.Channel(data['token']);
-			socket = channel.open();
+			var channel = new goog.appengine.Channel(data['token']);
+			var socket = channel.open();
 			
 			socket.onopen = function () {
 				console.info("connection opened");
@@ -89,6 +89,6 @@ $(function () {
 		});
 	};
 	
-	setupChannel();
+	setTimeout(setupChannel, 100);
 	
 });

@@ -17,6 +17,7 @@
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import util
 from google.appengine.api import channel
+from google.appengine.api import taskqueue
 
 import os
 from google.appengine.ext.webapp import template
@@ -28,6 +29,7 @@ import Cookie
 import logging
 
 from model import *
+from clientmanager import *
 
 class BaseHandler(webapp.RequestHandler):
     #copied from runwithfriends application
@@ -75,9 +77,9 @@ class SaveHandler(webapp.RequestHandler):
             d = {'rows': []}
             d['rows'].append({'title': item.title, 'bodytext': item.bodytext, 'createdate': item.createdate.isoformat()})
 
-            for token in cm.tokens():
-                logging.info("Sent message to client %s"%token)
-                channel.send_message(token, json.dumps(d))
+            for clientid in cm.clientids():
+                #channel.send_message(clientid, json.dumps(d))
+                taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': json.dumps(d)})
             
             self.response.out.write(json.dumps({'result': 'success'}))
         else:
@@ -102,16 +104,25 @@ class GetTokenHandler(webapp.RequestHandler):
         
         cm = ClientManager()
         
-        cm.add(token)
+        cm.add(uniqueid)
         
         self.response.headers['Content-Type'] = 'text/json'
         self.response.out.write(json.dumps(dict(token=token)))
+        
+class SendItemWorkerHandler(webapp.RequestHandler):
+    def post(self):
+        clientid = self.request.get('clientid')
+        message = self.request.get('message')
+        
+        channel.send_message(clientid, message)
 
 def main():
     application = webapp.WSGIApplication([('/', MainHandler),
                                          ('/save', SaveHandler),
                                          ('/list', ListHandler),
-                                         ('/gettoken', GetTokenHandler)],
+                                         ('/gettoken', GetTokenHandler),
+                                         ('/_ah/channel/disconnected/', ClientDisconnectHandler),
+                                         ('/workers/senditem', SendItemWorkerHandler),],
                                          debug=True)
     util.run_wsgi_app(application)
 
