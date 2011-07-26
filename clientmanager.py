@@ -4,6 +4,7 @@ from google.appengine.ext import webapp
 class ClientId(db.Model):
     clientid = db.StringProperty()
     status = db.StringProperty()
+    createdate = db.DateTimeProperty(auto_now_add=True)
     
 class ClientManager(object):
     """

@@ -35,6 +35,7 @@ $(function () {
 					});
 			},
 			data: function (data) {
+				//$$(this).revision = data['revision']
 				return {
 					items: data['rows']	
 				};
@@ -82,7 +83,6 @@ $(function () {
 			};
 			
 			socket.onmessage = function (message) {
-				console.info("data: %s"%message.data);
 				$("#mainlist").trigger('prependitem', [$.parseJSON(message.data)]);
 			};
 			

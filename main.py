@@ -75,11 +75,12 @@ class SaveHandler(webapp.RequestHandler):
             item.put()
             
             d = {'rows': []}
-            d['rows'].append({'title': item.title, 'bodytext': item.bodytext, 'createdate': item.createdate.isoformat()})
+            d['rows'].append(item.toDict())
+            jsonstr = json.dumps(d)
 
             for clientid in cm.clientids():
                 #channel.send_message(clientid, json.dumps(d))
-                taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': json.dumps(d)})
+                taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr})
             
             self.response.out.write(json.dumps({'result': 'success'}))
         else:
@@ -91,9 +92,9 @@ class ListHandler(webapp.RequestHandler):
         items.order("-createdate")
         
         d = {'rows': []}
-        for item in items:
-            d['rows'].append({'title': item.title, 'bodytext': item.bodytext, 'createdate': item.createdate.isoformat()})
-            
+        for item in items.fetch(20):
+            d['rows'].append(item.toDict())
+                
         self.response.headers['Content-Type'] = 'text/json'
         self.response.out.write(json.dumps(d))
 
@@ -114,6 +115,7 @@ class SendItemWorkerHandler(webapp.RequestHandler):
         clientid = self.request.get('clientid')
         message = self.request.get('message')
         
+        logging.info(message)
         channel.send_message(clientid, message)
 
 def main():
