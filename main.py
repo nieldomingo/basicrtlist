@@ -1,19 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2007 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
+
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import util
 from google.appengine.api import channel
@@ -79,7 +65,6 @@ class SaveHandler(webapp.RequestHandler):
             jsonstr = json.dumps(d)
 
             for clientid in cm.clientids():
-                #channel.send_message(clientid, json.dumps(d))
                 taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr})
             
             self.response.out.write(json.dumps({'result': 'success'}))
@@ -113,10 +98,37 @@ class GetTokenHandler(webapp.RequestHandler):
 class SendItemWorkerHandler(webapp.RequestHandler):
     def post(self):
         clientid = self.request.get('clientid')
-        message = self.request.get('message')
+        message = json.loads(self.request.get('message'))
         
-        logging.info(message)
-        channel.send_message(clientid, message)
+        cm = ClientManager()
+        messageid = self.request.get('messageid')
+        if not messageid:
+            messageid = str(uuid.uuid4())
+            cm.add_messageid(clientid, messageid)
+            jsonstr = json.dumps(dict(message, messageid=messageid, clientid=clientid))
+            channel.send_message(clientid, jsonstr)
+            taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr, 'messageid': messageid, 'count': 1}, countdown=180)
+        else:
+            if cm.check_clientid(clientid) and cm.check_messageid(clientid, messageid):
+                 count = self.request.get('count') + 1
+                 if count <= 5:
+                     logging.info("Resending message %s"%message)
+                     jsonstr = json.dumps(dict(message, messageid=messageid, clientid=clientid))
+                     channel.send_message(clientid, jsonstr)
+                     taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr, 'messageid': messageid, 'count': count}, countdown=180)
+                 else:
+                     # after trying 5 times, assume that the client has disconnected
+                     cm.remove(clientid)
+
+class RemoveMessageIdFromQueue(webapp.RequestHandler):
+    def post(self):
+        clientid = self.request.get('clientid')
+        messageid = self.request.get('messageid')
+        
+        if clientid and messageid:
+            cm = ClientManager()
+            cm.remove_messageid(clientid, messageid)
+        
 
 def main():
     application = webapp.WSGIApplication([('/', MainHandler),
@@ -124,7 +136,8 @@ def main():
                                          ('/list', ListHandler),
                                          ('/gettoken', GetTokenHandler),
                                          ('/_ah/channel/disconnected/', ClientDisconnectHandler),
-                                         ('/workers/senditem', SendItemWorkerHandler),],
+                                         ('/workers/senditem', SendItemWorkerHandler),
+                                         ('/removemessageidfromqueue', RemoveMessageIdFromQueue)],
                                          debug=True)
     util.run_wsgi_app(application)
 

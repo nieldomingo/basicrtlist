@@ -2,6 +2,8 @@ from google.appengine.ext import db
 from google.appengine.ext.db import polymodel
 from django.utils import simplejson as json
 
+import hashlib
+
 class Item(polymodel.PolyModel):
     title = db.StringProperty()
     bodytext = db.StringProperty(multiline=True)
@@ -17,23 +19,10 @@ class Item(polymodel.PolyModel):
                 d[k] = getattr(self, k)
             elif isinstance(o, db.DateTimeProperty):
                 d[k] = getattr(self, k).isoformat()
-                
+
+        d['checksum'] = hashlib.md5(self.title + self.bodytext).hexdigest();
+        
         return d
         
     def toJSON(self):
         return json.dumps(self.toDict())
-        
-    def put(self):
-        if self.is_saved():
-            polymodel.PolyModel.put(self)
-            lr = ListRevision(parent=self, action='add', itemjson=self.toJSON())
-            lr.put()
-        else:
-            polymodel.PolyModel.put(self)
-            lr = ListRevision(parent=self, action='edit', itemjson=self.toJSON())
-            lr.put()
-    
-class ListRevision(db.Model):
-    action = db.StringProperty()
-    timestamp = db.DateTimeProperty(auto_now_add=True)
-    itemjson = db.TextProperty()

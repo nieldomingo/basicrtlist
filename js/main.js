@@ -1,4 +1,6 @@
 $(function () {
+	var INTERVAL_DELAY_OPEN_CONNECTION = 10000;
+
 	$("#itemform").dialog({
 		autoOpen: false,
 		modal: true,
@@ -28,6 +30,10 @@ $(function () {
 	
 	$("#mainlist").evently({
 		_init: {
+			before: function () {
+				// storage for messageids added to the list, this is kept to prevent duplicate entries
+				$$(this).messages = {};
+			},
 			async: function (cb) {
 				$.getJSON('/list',
 					function (data) {
@@ -35,7 +41,6 @@ $(function () {
 					});
 			},
 			data: function (data) {
-				//$$(this).revision = data['revision']
 				return {
 					items: data['rows']	
 				};
@@ -52,6 +57,14 @@ $(function () {
 		},
 		prependitem: {
 			data: function (e, data) {
+				var clientid = data['clientid'];
+				var messageid = data['messageid'];
+				
+				$.post('/removemessageidfromqueue', {clientid: clientid, messageid: messageid});
+
+				// add the messageid to the storage list to prevent duplicate entries
+				$$(this).messages[messageid] = true;
+				
 				return {
 					items: data['rows']	
 				};
@@ -70,25 +83,50 @@ $(function () {
 	});
 		
 	var setupChannel = function () {
+		$("#statusmessage").text("opening connection");
+		console.info("trying to open connection");
 		$.getJSON('/gettoken', function (data) {
 			var channel = new goog.appengine.Channel(data['token']);
 			var socket = channel.open();
 			
 			socket.onopen = function () {
 				console.info("connection opened");
+				$("#statusmessage").text("");
 			};
 			
 			socket.onclose = function () {
-				setupChannel();
+				console.info("connection closed");
+			};
+			
+			socket.onerror = function () {
+				console.info("connection error");
+				$("#statusmessage").text("no connection...");
+				setTimeout(setupChannel, INTERVAL_DELAY_OPEN_CONNECTION);
 			};
 			
 			socket.onmessage = function (message) {
-				$("#mainlist").trigger('prependitem', [$.parseJSON(message.data)]);
+				console.info("message received " + message.data);
+				var d = $.parseJSON(message.data);
+				
+				// check if the message is already added to the list
+				if ($$("#mainlist").messages[d['messageid']]) {
+					$.post('/removemessageidfromqueue', {clientid: clientid, messageid: messageid});
+				}
+				else {
+					$("#mainlist").trigger('prependitem', [d]);
+				}
 			};
 			
 		});
 	};
 	
-	setTimeout(setupChannel, 100);
+	$(document).ajaxError(function (event, request, settings) {
+		if (settings.url == '/gettoken') {
+			$("#statusmessage").text("no connection...");
+			setTimeout(setupChannel, INTERVAL_DELAY_OPEN_CONNECTION);
+		}
+	});
+
+	setupChannel();
 	
 });

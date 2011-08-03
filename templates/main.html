@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 
+{% block header %}
+<div id="statusmessage">
+</div>
+{% endblock %}
+
 {% block content %}
 <div id="itemform" title="Item Form">
   <form id ="itemformmain" action="/save" method="post">
@@ -24,8 +29,7 @@
           <textarea name="itemtext"
                     cols="50"
                     rows="5"
-                    required>
-          </textarea>
+                    required></textarea>
         </div>
       </li>
     </ul>
