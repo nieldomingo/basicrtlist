@@ -16,6 +16,7 @@ import logging
 
 from model import *
 from clientmanager import *
+import utils
 
 class BaseHandler(webapp.RequestHandler):
     #copied from runwithfriends application
@@ -60,7 +61,7 @@ class SaveHandler(webapp.RequestHandler):
             item = Item(title=itemtitle, bodytext=itemtext)
             item.put()
             
-            d = {'rows': []}
+            d = {'rows': [], 'mtype': 'add'}
             d['rows'].append(item.toDict())
             jsonstr = json.dumps(d)
 
@@ -99,28 +100,40 @@ class SendItemWorkerHandler(webapp.RequestHandler):
     def post(self):
         clientid = self.request.get('clientid')
         message = json.loads(self.request.get('message'))
-        
+
+        countdown = 180
+
         cm = ClientManager()
         messageid = self.request.get('messageid')
         if not messageid:
             messageid = str(uuid.uuid4())
             cm.add_messageid(clientid, messageid)
-            jsonstr = json.dumps(dict(message, messageid=messageid, clientid=clientid))
+            jsonstr = json.dumps(dict(message,
+                messageid=messageid,
+                clientid=clientid))
             channel.send_message(clientid, jsonstr)
-            taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr, 'messageid': messageid, 'count': 1}, countdown=180)
+            taskqueue.add(url='/workers/senditem', params={'clientid': clientid,
+                'message': jsonstr,
+                'messageid': messageid,
+                'count': 1}, countdown=countdown)
         else:
             if cm.check_clientid(clientid) and cm.check_messageid(clientid, messageid):
                  count = self.request.get('count') + 1
                  if count <= 5:
                      logging.info("Resending message %s"%message)
-                     jsonstr = json.dumps(dict(message, messageid=messageid, clientid=clientid))
+                     jsonstr = json.dumps(dict(message,
+                         messageid=messageid,
+                         clientid=clientid))
                      channel.send_message(clientid, jsonstr)
-                     taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr, 'messageid': messageid, 'count': count}, countdown=180)
+                     taskqueue.add(url='/workers/senditem', params={'clientid': clientid,
+                         'message': jsonstr,
+                         'messageid': messageid,
+                         'count': count}, countdown=countdown)
                  else:
                      # after trying 5 times, assume that the client has disconnected
                      cm.remove(clientid)
 
-class RemoveMessageIdFromQueue(webapp.RequestHandler):
+class RemoveMessageIdFromQueueHandler(webapp.RequestHandler):
     def post(self):
         clientid = self.request.get('clientid')
         messageid = self.request.get('messageid')
@@ -128,7 +141,27 @@ class RemoveMessageIdFromQueue(webapp.RequestHandler):
         if clientid and messageid:
             cm = ClientManager()
             cm.remove_messageid(clientid, messageid)
-        
+
+class RequestUpdateListHandler(webapp.RequestHandler):
+    def post(self):
+        clientid = self.request.cookies.get('uid')
+        listdata = self.request.get('listdata')
+
+        logging.info("Received Update List Request")
+        #logging.info(listdata)
+
+        l = json.loads(listdata)
+
+        createdates = [utils.parse_isoformat(o['createdate']) for o in l]
+        maxdate = max(createdates)
+
+        query = Item().all().filter('createdate >', maxdate).order('-createdate')
+        newitems = [o.toDict() for o in query]
+
+        jsonstr = json.dumps({'mtype': 'updatelist', 'add': {'rows': newitems}})
+	taskqueue.add(url='/workers/senditem',
+            params={'clientid': clientid, 'message': jsonstr})
+
 
 def main():
     application = webapp.WSGIApplication([('/', MainHandler),
@@ -137,7 +170,8 @@ def main():
                                          ('/gettoken', GetTokenHandler),
                                          ('/_ah/channel/disconnected/', ClientDisconnectHandler),
                                          ('/workers/senditem', SendItemWorkerHandler),
-                                         ('/removemessageidfromqueue', RemoveMessageIdFromQueue)],
+                                         ('/removemessageidfromqueue', RemoveMessageIdFromQueueHandler),
+                                         ('/requestupdatelist', RequestUpdateListHandler)],
                                          debug=True)
     util.run_wsgi_app(application)
 

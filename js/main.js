@@ -27,7 +27,11 @@ $(function () {
 			$("#itemform").dialog("open");
 		}
 	);
-	
+
+	var basicItemElements = function (o) {
+		return {checksum: o['checksum'], key: o['key'], createdate: o['createdate']};
+	};	
+
 	$("#mainlist").evently({
 		_init: {
 			before: function () {
@@ -41,6 +45,7 @@ $(function () {
 					});
 			},
 			data: function (data) {
+				$$(this).listdata = $.map(data['rows'], basicItemElements);
 				return {
 					items: data['rows']	
 				};
@@ -60,11 +65,14 @@ $(function () {
 				var clientid = data['clientid'];
 				var messageid = data['messageid'];
 				
-				$.post('/removemessageidfromqueue', {clientid: clientid, messageid: messageid});
+				//$.post('/removemessageidfromqueue', {clientid: clientid, messageid: messageid});
 
 				// add the messageid to the storage list to prevent duplicate entries
-				$$(this).messages[messageid] = true;
+				//$$(this).messages[messageid] = true;
+
 				
+				$$(this).listdata = $$(this).listdata.concat($.map(data['rows'], basicItemElements));
+	
 				return {
 					items: data['rows']	
 				};
@@ -81,7 +89,8 @@ $(function () {
 			render: 'prepend'
 		}
 	});
-		
+
+	var connection_open_count = 0; // counter to count how many times the client has opened a connection		
 	var setupChannel = function () {
 		$("#statusmessage").text("opening connection");
 		console.info("trying to open connection");
@@ -92,6 +101,14 @@ $(function () {
 			socket.onopen = function () {
 				console.info("connection opened");
 				$("#statusmessage").text("");
+				if (connection_open_count > 0) {
+					// if connection is not initial connection
+					// then request from server an update list message
+					$.post('/requestupdatelist',
+						{'listdata': JSON.stringify($$("#mainlist").listdata)});
+
+				}
+				connection_open_count += 1;
 			};
 			
 			socket.onclose = function () {
@@ -107,13 +124,36 @@ $(function () {
 			socket.onmessage = function (message) {
 				console.info("message received " + message.data);
 				var d = $.parseJSON(message.data);
-				
-				// check if the message is already added to the list
-				if ($$("#mainlist").messages[d['messageid']]) {
-					$.post('/removemessageidfromqueue', {clientid: clientid, messageid: messageid});
+
+				var clientid = d['clientid'];
+				var messageid = d['messageid'];
+
+                                if (d.mtype == 'add') { 	
+					// check if the message is already added to the list
+					if (! $$("#mainlist").messages[d['messageid']]) {
+						$("#mainlist").trigger('prependitem', [d]);
+						$$("#mainlist").messages[messageid] = true;
+					}
+					$.post('/removemessageidfromqueue',
+						{clientid: clientid, messageid: messageid});
 				}
-				else {
-					$("#mainlist").trigger('prependitem', [d]);
+				else if (d.mtype == 'updatelist') {
+					if (! $$("#mainlist").messages[d['messageid']]) {
+						var addlist = d['add'];
+						if (addlist) {
+							if ($$("#mainlist").messages[d['messageid']]) {
+								$.post('/removemessageidfromqueue',
+									{clientid: clientid, messageid: messageid});
+							}
+							else {
+								$("#mainlist").trigger('prependitem', [addlist]);
+							}
+						}
+						$$("#mainlist").messages[messageid] = true;
+					}
+					$.post('/removemessageidfromqueue',
+						{clientid: clientid, messageid: messageid});
+
 				}
 			};
 			
