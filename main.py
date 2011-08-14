@@ -61,12 +61,12 @@ class SaveHandler(webapp.RequestHandler):
             item = Item(title=itemtitle, bodytext=itemtext)
             item.put()
             
-            d = {'rows': [], 'mtype': 'add'}
-            d['rows'].append(item.toDict())
-            jsonstr = json.dumps(d)
-
-            for clientid in cm.clientids():
-                taskqueue.add(url='/workers/senditem', params={'clientid': clientid, 'message': jsonstr})
+            messageid = str(uuid.uuid4())
+            jsonstr = json.dumps({'rows': [{'title': itemtitle, 'bodytext': itemtext},],
+                'messageid': messageid, 'mtype': 'add'})
+            taskqueue.add(url='/workers/sendmessages',
+                          params={'message': jsonstr, 'messageid': messageid},
+                          name="SendMessages-%s"%messageid)
             
             self.response.out.write(json.dumps({'result': 'success'}))
         else:
@@ -95,43 +95,74 @@ class GetTokenHandler(webapp.RequestHandler):
         
         self.response.headers['Content-Type'] = 'text/json'
         self.response.out.write(json.dumps(dict(token=token)))
+
+class SendMessagesWorkerHandler(webapp.RequestHandler):
+    def post(self):
+        message = json.loads(self.request.get('message'))
+        messageid = self.request.get('messageid')
+        
+        cm = ClientManager()
+        
+        for clientid in cm.clientids():
+            try:
+                jsonstr = json.dumps(dict(message,
+                                          clientid=clientid))
+                logging.info("Clientid: %s, Messageid: %s"%(clientid, messageid))
+                taskqueue.add(url='/workers/senditem',
+                              params={'clientid': clientid,
+                                      'message': jsonstr,
+                                      'count': 0,
+                                      'messageid': messageid},
+                              name="SendItem-%s-%s"%(messageid, clientid))
+            except (taskqueue.TaskAlreadyExistsError,
+                    taskqueue.TombstonedTaskError):
+                pass
         
 class SendItemWorkerHandler(webapp.RequestHandler):
     def post(self):
         clientid = self.request.get('clientid')
-        message = json.loads(self.request.get('message'))
-
-        countdown = 120 #number of seconds before resending message
-
-        cm = ClientManager()
+        message = self.request.get('message')
         messageid = self.request.get('messageid')
-        if not messageid:
-            messageid = str(uuid.uuid4())
-            cm.add_messageid(clientid, messageid)
-            jsonstr = json.dumps(dict(message,
-                messageid=messageid,
-                clientid=clientid))
-            channel.send_message(clientid, jsonstr)
-            taskqueue.add(url='/workers/senditem', params={'clientid': clientid,
-                'message': jsonstr,
-                'messageid': messageid,
-                'count': 1}, countdown=countdown)
+        
+        countdown = 30 # number of seconds before resending message
+        
+        cm = ClientManager()
+        count = int(self.request.get('count'))
+        if count == 0: # first time the message is sent to the client
+            try:
+                taskqueue.add(url='/workers/senditem',
+                              params={'clientid': clientid,
+                                      'message': message,
+                                      'messageid': messageid,
+                                      'count': 1},
+                              countdown=countdown,
+                              name="SendItem-%s-%s-%s"%(clientid, messageid, 1))
+                
+                cm.add_messageid(clientid, messageid)
+                channel.send_message(clientid, message)
+            except (taskqueue.TaskAlreadyExistsError,
+                    taskqueue.TombstonedTaskError):
+                pass
         else:
             if cm.check_clientid(clientid) and cm.check_messageid(clientid, messageid):
-                 count = self.request.get('count') + 1
-                 if count <= 5:
-                     logging.info("Resending message %s"%message)
-                     jsonstr = json.dumps(dict(message,
-                         messageid=messageid,
-                         clientid=clientid))
-                     channel.send_message(clientid, jsonstr)
-                     taskqueue.add(url='/workers/senditem', params={'clientid': clientid,
-                         'message': jsonstr,
-                         'messageid': messageid,
-                         'count': count}, countdown=countdown)
-                 else:
-                     # after trying 5 times, assume that the client has disconnected
-                     cm.remove(clientid)
+                count = count + 1
+                if count <= 5:
+                    try:
+                        taskqueue.add(url='/workers/senditem',
+                                      params={'clientid': clientid,
+                                              'message': message,
+                                              'messageid': messageid,
+                                              'count': count},
+                                      countdown=countdown,
+                                      name="SendItem-%s-%s-%s"%(clientid, messageid, count))
+                        logging.info("Resending message %s"%message)
+                        channel.send_message(clientid, message)
+                    except (taskqueue.TaskAlreadyExistsError,
+                            taskqueue.TombstonedTaskError):
+                        pass
+                else:
+                    # after trying 5 times, assume that the client has disconnected
+                    cm.remove(clientid)
 
 class RemoveMessageIdFromQueueHandler(webapp.RequestHandler):
     def post(self):
@@ -146,10 +177,10 @@ class RequestUpdateListHandler(webapp.RequestHandler):
     def post(self):
         clientid = self.request.cookies.get('uid')
         listdata = self.request.get('listdata')
-
+        
         logging.info("Received Update List Request")
         #logging.info(listdata)
-
+        
         l = json.loads(listdata)
 
         createdates = [utils.parse_isoformat(o['createdate']) for o in l]
@@ -158,9 +189,11 @@ class RequestUpdateListHandler(webapp.RequestHandler):
         query = Item().all().filter('createdate >', maxdate).order('-createdate')
         newitems = [o.toDict() for o in query]
 
-        jsonstr = json.dumps({'mtype': 'updatelist', 'add': {'rows': newitems}})
-	taskqueue.add(url='/workers/senditem',
-            params={'clientid': clientid, 'message': jsonstr})
+        messageid = str(uuid.uuid4())
+
+        jsonstr = json.dumps({'mtype': 'updatelist', 'add': {'rows': newitems}, 'clientid': clientid, 'messageid': messageid})
+        taskqueue.add(url='/workers/senditem',
+                      params={'clientid': clientid, 'message': jsonstr, 'count': 0})
 
 
 def main():
@@ -170,6 +203,7 @@ def main():
                                          ('/gettoken', GetTokenHandler),
                                          ('/_ah/channel/disconnected/', ClientDisconnectHandler),
                                          ('/workers/senditem', SendItemWorkerHandler),
+                                         ('/workers/sendmessages', SendMessagesWorkerHandler),
                                          ('/removemessageidfromqueue', RemoveMessageIdFromQueueHandler),
                                          ('/requestupdatelist', RequestUpdateListHandler)],
                                          debug=True)
