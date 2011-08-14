@@ -101,7 +101,7 @@ class SendItemWorkerHandler(webapp.RequestHandler):
         clientid = self.request.get('clientid')
         message = json.loads(self.request.get('message'))
 
-        countdown = 180
+        countdown = 120 #number of seconds before resending message
 
         cm = ClientManager()
         messageid = self.request.get('messageid')
