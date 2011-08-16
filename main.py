@@ -62,8 +62,11 @@ class SaveHandler(webapp.RequestHandler):
             item.put()
             
             messageid = str(uuid.uuid4())
-            jsonstr = json.dumps({'rows': [{'title': itemtitle, 'bodytext': itemtext},],
-                'messageid': messageid, 'mtype': 'add'})
+                
+            d = {'rows': [], 'mtype': 'add', 'messageid': messageid}
+            d['rows'].append(item.toDict())
+            jsonstr = json.dumps(d)
+            
             taskqueue.add(url='/workers/sendmessages',
                           params={'message': jsonstr, 'messageid': messageid},
                           name="SendMessages-%s"%messageid)
@@ -193,7 +196,7 @@ class RequestUpdateListHandler(webapp.RequestHandler):
 
         jsonstr = json.dumps({'mtype': 'updatelist', 'add': {'rows': newitems}, 'clientid': clientid, 'messageid': messageid})
         taskqueue.add(url='/workers/senditem',
-                      params={'clientid': clientid, 'message': jsonstr, 'count': 0})
+                      params={'clientid': clientid, 'message': jsonstr, 'count': 0, 'messageid': messageid})
 
 
 def main():
