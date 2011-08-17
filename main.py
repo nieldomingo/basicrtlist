@@ -18,6 +18,8 @@ from model import *
 from clientmanager import *
 import utils
 
+import random
+
 class BaseHandler(webapp.RequestHandler):
     #copied from runwithfriends application
     def set_cookie(self, name, value, expires=None):
@@ -56,7 +58,7 @@ class SaveHandler(webapp.RequestHandler):
         self.response.headers['Content-Type'] = 'text/json'
         
         cm = ClientManager()
-        
+
         if itemtext and itemtitle:
             item = Item(title=itemtitle, bodytext=itemtext)
             item.put()
@@ -95,7 +97,8 @@ class GetTokenHandler(webapp.RequestHandler):
         cm = ClientManager()
         
         cm.add(uniqueid)
-        
+        cm.reset_sequencecount(uniqueid)
+
         self.response.headers['Content-Type'] = 'text/json'
         self.response.out.write(json.dumps(dict(token=token)))
 
@@ -106,17 +109,21 @@ class SendMessagesWorkerHandler(webapp.RequestHandler):
         
         cm = ClientManager()
         
-        for clientid in cm.clientids():
+        countdown = random.randint(0, 60)
+        for cc in cm.clients():
             try:
+                sequencecount = cc.sequencecount
                 jsonstr = json.dumps(dict(message,
-                                          clientid=clientid))
-                logging.info("Clientid: %s, Messageid: %s"%(clientid, messageid))
+                                          clientid=cc.clientid, sequence=sequencecount))
                 taskqueue.add(url='/workers/senditem',
-                              params={'clientid': clientid,
+                              params={'clientid': cc.clientid,
                                       'message': jsonstr,
                                       'count': 0,
-                                      'messageid': messageid},
-                              name="SendItem-%s-%s"%(messageid, clientid))
+                                      'messageid': messageid,
+                                      'sequence': sequencecount},
+                              name="SendItem-%s-%s"%(messageid, cc.clientid), countdown=countdown)
+                cc.sequencecount += 1
+                cc.put()
             except (taskqueue.TaskAlreadyExistsError,
                     taskqueue.TombstonedTaskError):
                 pass
@@ -194,9 +201,18 @@ class RequestUpdateListHandler(webapp.RequestHandler):
 
         messageid = str(uuid.uuid4())
 
-        jsonstr = json.dumps({'mtype': 'updatelist', 'add': {'rows': newitems}, 'clientid': clientid, 'messageid': messageid})
+        cm = ClientManager()
+        cc = cm.client(clientid)
+
+        jsonstr = json.dumps({'mtype': 'updatelist',
+                              'add': {'rows': newitems},
+                              'clientid': clientid,
+                              'messageid': messageid,
+                              'sequence': cc.sequencecount})
         taskqueue.add(url='/workers/senditem',
                       params={'clientid': clientid, 'message': jsonstr, 'count': 0, 'messageid': messageid})
+        cc.sequencecount += 1
+        cc.put()
 
 
 def main():

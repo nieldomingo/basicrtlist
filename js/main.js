@@ -92,6 +92,7 @@ $(function () {
 				var socket = channel.open();
 				
 				var messagemap = {};
+				var defferedmessages = {};
 				
 				socket.onopen = function () {
 					console.info("connection opened");
@@ -115,25 +116,66 @@ $(function () {
 					setTimeout(setupChannel, INTERVAL_DELAY_OPEN_CONNECTION);
 				};
 				
+				var processmessage = function (messageobj) {
+					var messageid = messageobj['messageid'];
+					
+					if (! messagemap[messageid]) {
+						if (messageobj.mtype == 'add') { 	
+							$("#mainlist").trigger('prependitem', [messageobj]);
+						}
+						else if (messageobj.mtype == 'updatelist') {
+							var addlist = messageobj['add'];
+							if (addlist && addlist['rows'].length) {
+								$("#mainlist").trigger('prependitem', [addlist]);
+							}
+						}
+					}
+					
+					messagemap[messageid] = true;
+					
+				};
+				
+				var SequenceManager = {
+					sequencecount: 0,
+					deferredmessages: {},
+					increment: function () {
+						this.sequencecount += 1;
+						this.process_defferedmessages();
+					},
+					reset: function () {
+						this.sequencecount = 0;
+						this.deferredmessages = {};
+					},
+					push_defferedmessage: function (m) {
+						this.deferredmessages[m['sequence']] = m;
+					},
+					process_defferedmessages: function () {
+						if (this.deferredmessages[this.sequencecount]) {
+							processmessage(this.deferredmessages[this.sequencecount]);
+							console.log(this.sequencecount);
+							console.log(this.deferredmessages);
+							delete this.deferredmessages[this.sequencecount];
+							this.sequencecount += 1;
+							this.process_defferedmessages();
+						}
+					}
+				};
+				
 				socket.onmessage = function (message) {
 					console.info("message received " + message.data);
 					var d = $.parseJSON(message.data);
 					
 					var clientid = d['clientid'];
 					var messageid = d['messageid'];
+					var message_seq = d['sequence'];
 					
-					if (! messagemap[messageid]) {
-						if (d.mtype == 'add') { 	
-							$("#mainlist").trigger('prependitem', [d]);
-						}
-						else if (d.mtype == 'updatelist') {
-							var addlist = d['add'];
-							if (addlist && addlist['rows'].length) {
-								$("#mainlist").trigger('prependitem', [addlist]);
-							}
-						}
+					if (message_seq == SequenceManager.sequencecount) {
+						processmessage(d);
+						SequenceManager.increment();
 					}
-					messagemap[messageid] = true;
+					else if (message_seq > SequenceManager.sequencecount){
+						SequenceManager.push_defferedmessage(d);
+					}
 					$.post('/removemessageidfromqueue',
 						{clientid: clientid, messageid: messageid});
 				};
