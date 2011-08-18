@@ -18,7 +18,7 @@ from model import *
 from clientmanager import *
 import utils
 
-import random
+#import random
 
 class BaseHandler(webapp.RequestHandler):
     #copied from runwithfriends application
@@ -109,7 +109,7 @@ class SendMessagesWorkerHandler(webapp.RequestHandler):
         
         cm = ClientManager()
         
-        countdown = random.randint(0, 60)
+        #countdown = random.randint(0, 60)
         for cc in cm.clients():
             try:
                 sequencecount = cc.sequencecount
@@ -121,7 +121,7 @@ class SendMessagesWorkerHandler(webapp.RequestHandler):
                                       'count': 0,
                                       'messageid': messageid,
                                       'sequence': sequencecount},
-                              name="SendItem-%s-%s"%(messageid, cc.clientid), countdown=countdown)
+                              name="SendItem-%s-%s"%(messageid, cc.clientid))
                 cc.sequencecount += 1
                 cc.put()
             except (taskqueue.TaskAlreadyExistsError,
