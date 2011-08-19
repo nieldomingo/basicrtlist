@@ -11,10 +11,10 @@ $(function () {
 				var itemtext = $("#itemformmain textarea[name='itemtext']").val();
 				var that = this;
 				$.post('/save',
-				       {itemtitle: itemtitle, itemtext: itemtext},
-				       function () {
-				       	$(that).dialog("close");
-				       }, 'json');
+					{itemtitle: itemtitle, itemtext: itemtext},
+					function () {
+					$(that).dialog("close");
+					}, 'json');
 			}, 
 			"Cancel": function() { 
 				$(this).dialog("close"); 
@@ -29,7 +29,7 @@ $(function () {
 	);
 
 	var basicItemElements = function (o) {
-		return {checksum: o['checksum'], key: o['key'], createdate: o['createdate']};
+		return {checksum: o.checksum, key: o.key, createdate: o.createdate};
 	};	
 
 	$("#mainlist").evently({
@@ -41,41 +41,41 @@ $(function () {
 					});
 			},
 			data: function (data) {
-				$$(this).listdata = $.map(data['rows'], basicItemElements);
+				$$(this).listdata = $.map(data.rows, basicItemElements);
 				return {
-					items: data['rows']	
+					items: data.rows
 				};
 			},
-			mustache: '\
-				{{#items}}\
-				<div class="itementry">\
-					<h2>{{title}}</h2>\
-					<div>\
-						{{bodytext}}\
-					</div>\
-				</div>\
-				{{/items}}'
+			mustache:
+				'{{#items}}' +
+				'<div class="itementry">' +
+				'	<h2>{{title}}</h2>' +
+				'	<div>' +
+				'		{{bodytext}}' +
+				'	</div>' +
+				'</div>' +
+				'{{/items}}'
 		},
 		prependitem: {
 			data: function (e, data) {
-				var clientid = data['clientid'];
-				var messageid = data['messageid'];
+				var clientid = data.clientid;
+				var messageid = data.messageid;
 				
-				$$(this).listdata = $$(this).listdata.concat($.map(data['rows'], basicItemElements));
+				$$(this).listdata = $$(this).listdata.concat($.map(data.rows, basicItemElements));
 	
 				return {
-					items: data['rows']	
+					items: data.rows
 				};
 			},
-			mustache: '\
-				{{#items}}\
-				<div class="itementry">\
-					<h2>{{title}}</h2>\
-					<div>\
-						{{bodytext}}\
-					</div>\
-				</div>\
-				{{/items}}',
+			mustache:
+				'{{#items}}' +
+				'<div class="itementry">' +
+				'	<h2>{{title}}</h2>' +
+				'	<div>' +
+				'		{{bodytext}}' +
+				'	</div>' +
+				'</div>' +
+				'{{/items}}',
 			render: 'prepend'
 		}
 	});
@@ -88,7 +88,7 @@ $(function () {
 			type: 'GET',
 			dataType: 'json',
 			success: function (data) {
-				var channel = new goog.appengine.Channel(data['token']);
+				var channel = new goog.appengine.Channel(data.token);
 				var socket = channel.open();
 				
 				var messagemap = {};
@@ -117,15 +117,15 @@ $(function () {
 				};
 				
 				var processmessage = function (messageobj) {
-					var messageid = messageobj['messageid'];
+					var messageid = messageobj.messageid;
 					
-					if (! messagemap[messageid]) {
-						if (messageobj.mtype == 'add') { 	
+					if (messagemap.messageid === undefined) {
+						if (messageobj.mtype == 'add') {
 							$("#mainlist").trigger('prependitem', [messageobj]);
 						}
 						else if (messageobj.mtype == 'updatelist') {
-							var addlist = messageobj['add'];
-							if (addlist && addlist['rows'].length) {
+							var addlist = messageobj.add;
+							if (addlist && addlist.rows.length) {
 								$("#mainlist").trigger('prependitem', [addlist]);
 							}
 						}
@@ -147,7 +147,7 @@ $(function () {
 						this.deferredmessages = {};
 					},
 					push_defferedmessage: function (m) {
-						this.deferredmessages[m['sequence']] = m;
+						this.deferredmessages[m.sequence] = m;
 					},
 					process_defferedmessages: function () {
 						if (this.deferredmessages[this.sequencecount]) {
@@ -165,9 +165,9 @@ $(function () {
 					console.info("message received " + message.data);
 					var d = $.parseJSON(message.data);
 					
-					var clientid = d['clientid'];
-					var messageid = d['messageid'];
-					var message_seq = d['sequence'];
+					var clientid = d.clientid;
+					var messageid = d.messageid;
+					var message_seq = d.sequence;
 					
 					if (message_seq == SequenceManager.sequencecount) {
 						processmessage(d);
@@ -188,5 +188,5 @@ $(function () {
 	};
 
 	setupChannel();
-		
+	
 });
