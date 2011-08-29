@@ -119,7 +119,7 @@ $(function () {
 				var processmessage = function (messageobj) {
 					var messageid = messageobj.messageid;
 					
-					if (messagemap.messageid === undefined) {
+					if (typeof messagemap.messageid === 'undefined') {
 						if (messageobj.mtype == 'add') {
 							$("#mainlist").trigger('prependitem', [messageobj]);
 						}
