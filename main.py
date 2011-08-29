@@ -94,13 +94,16 @@ class GetTokenHandler(webapp.RequestHandler):
         uniqueid = self.request.cookies.get('uid')
         token = channel.create_channel(uniqueid)
         
+        # calculate a suitable start sequence value based on time
+        td = datetime.datetime.now() - datetime.datetime(year=2011, month=1, day=1)
+        startsequence = (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) / 10**3
         cm = ClientManager()
         
         cm.add(uniqueid)
-        cm.reset_sequencecount(uniqueid)
-
+        cm.reset_sequencecount(uniqueid, startsequence)
+        
         self.response.headers['Content-Type'] = 'text/json'
-        self.response.out.write(json.dumps(dict(token=token)))
+        self.response.out.write(json.dumps(dict(token=token, startsequence=startsequence)))
 
 class SendMessagesWorkerHandler(webapp.RequestHandler):
     def post(self):

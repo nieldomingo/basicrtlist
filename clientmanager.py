@@ -76,7 +76,7 @@ class ClientManager(object):
         cc = db.get(cc_k)
         return cc
     
-    def reset_sequencecount(self, clientid):
+    def reset_sequencecount(self, clientid, resetval=0):
         """
         resets the sequence count of the ConnectedClient object with
         the given clientid
@@ -85,7 +85,7 @@ class ClientManager(object):
         cc_k = db.Key.from_path('ConnectedClients', clientid)
         cc = db.get(cc_k)
         if cc:
-            cc.sequencecount = 0
+            cc.sequencecount = resetval
             cc.put()
         
 class ClientDisconnectHandler(webapp.RequestHandler):

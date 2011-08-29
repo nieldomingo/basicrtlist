@@ -142,8 +142,8 @@ $(function () {
 						this.sequencecount += 1;
 						this.process_defferedmessages();
 					},
-					reset: function () {
-						this.sequencecount = 0;
+					reset: function (startsequence) {
+						this.sequencecount = startsequence;
 						this.deferredmessages = {};
 					},
 					push_defferedmessage: function (m) {
@@ -161,6 +161,8 @@ $(function () {
 					}
 				};
 				
+				SequenceManager.reset(data.startsequence);
+				
 				socket.onmessage = function (message) {
 					console.info("message received " + message.data);
 					var d = $.parseJSON(message.data);
@@ -168,6 +170,7 @@ $(function () {
 					var clientid = d.clientid;
 					var messageid = d.messageid;
 					var message_seq = d.sequence;
+					console.info("Sequence count: " + SequenceManager.sequencecount);
 					
 					if (message_seq == SequenceManager.sequencecount) {
 						processmessage(d);
